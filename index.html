@@ -139,6 +139,20 @@
         .dict-selector label { font-size: 14px; color: var(--text-secondary); }
         .dict-selector select { padding: 10px 15px; border-radius: 8px; border: 1px solid var(--border); font-size: 14px; min-width: 150px; background: var(--card-bg); color: var(--text-primary); }
 
+        /* ===== 全局 select 美化 ===== */
+        select {
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+            padding-right: 26px !important;
+            cursor: pointer;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        select:hover { border-color: var(--accent) !important; }
+        select:focus { outline: none; border-color: var(--accent) !important; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent); }
+
         button.primary { background: var(--accent); color: #fff; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; transition: opacity 0.2s; }
         button.ghost { background: var(--btn-ghost-bg); color: var(--btn-ghost-text); border: 1px solid var(--btn-ghost-border); padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: opacity 0.2s; }
         button.danger { background: transparent; color: #d32f2f; border: 1px solid #d32f2f; }
@@ -265,6 +279,12 @@
             background: color-mix(in srgb, var(--accent) 50%, var(--border));
         }
         * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--accent) 30%, var(--border)) transparent; }
+
+        /* ===== 分类拖拽排序 ===== */
+        .sub-item[draggable] { cursor: grab; }
+        .sub-item[draggable]:active { cursor: grabbing; }
+        .sub-item.drag-over { border-top: 2px solid var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--main-bg)); }
+        .sub-item.dragging { opacity: 0.4; }
     </style>
 </head>
 <body>
@@ -663,11 +683,13 @@
         const inputCatList = document.getElementById('input-cat-list');
         if(inputCatList) {
             inputCatList.innerHTML = db.cats.map(c => `
-                <div class="sub-item ${state.inputCat===c?'active':''}" onclick="state.inputCat='${c}'; render();">
-                    <span ondblclick="renameCat('${c}', this, event)" title="双击改名" style="flex:1;cursor:pointer;">${c}</span>
-                    <span onclick="delCat('cats','${c}',event)" style="color:#999; cursor:pointer; flex-shrink:0;">×</span>
+                <div class="sub-item ${state.inputCat===c?'active':''}" draggable="true" data-cat="${c.replace(/"/g,'&quot;')}" onclick="state.inputCat='${c.replace(/'/g,"\\'")}'; render();">
+                    <span style="flex:1;">⠿ ${c}</span>
+                    <span onclick="renameCat('${c.replace(/'/g,"\\'")}',event)" title="改名" style="color:#bbb; cursor:pointer; font-size:12px; padding:0 2px; flex-shrink:0;">✏️</span>
+                    <span onclick="delCat('cats','${c.replace(/'/g,"\\'")}',event)" style="color:#bbb; cursor:pointer; flex-shrink:0; margin-left:2px;">×</span>
                 </div>
             `).join('');
+            initCatDrag(inputCatList);
         }
 
         // 2. 评论库渲染
@@ -687,15 +709,19 @@
         
         document.getElementById('work-cat-list').innerHTML = db.cats.map(c => {
             const unpublished = (catCounts[c][0] || 0) + (catCounts[c][1] || 0) + (catCounts[c][3] || 0);
+            const cs = c.replace(/'/g,"\\'");
+            const cd = c.replace(/"/g,'&quot;');
             return `
-            <div class="sub-item ${state.workCat===c?'active':''}" onclick="state.workCat='${c}'; render();">
-                <span ondblclick="renameCat('${c}', this, event)" title="双击改名" style="flex:1;cursor:pointer;">${c}</span>
-                <div style="display: flex; gap: 4px; flex-shrink:0;">
+            <div class="sub-item ${state.workCat===c?'active':''}" draggable="true" data-cat="${cd}" onclick="state.workCat='${cs}'; render();">
+                <span style="flex:1;">⠿ ${c}</span>
+                <div style="display:flex; gap:4px; align-items:center; flex-shrink:0;">
                     ${unpublished > 0 ? `<span class="count-badge">${unpublished}</span>` : ''}
-                    <span onclick="delCat('cats','${c}',event)" style="color:#999; cursor:pointer;">×</span>
+                    <span onclick="renameCat('${cs}',event)" title="改名" style="color:#bbb; cursor:pointer; font-size:12px; padding:0 2px;">✏️</span>
+                    <span onclick="delCat('cats','${cs}',event)" style="color:#bbb; cursor:pointer;">×</span>
                 </div>
             </div>
         `}).join('');
+        initCatDrag(document.getElementById('work-cat-list'));
 
         // 3. 更新状态数量显示
         const statusCounts = { 0: 0, 1: 0, 2: 0, 3: 0 };
@@ -995,38 +1021,78 @@
         persist();
     }
 
-    function renameCat(oldName, spanEl, e) {
-        e.stopPropagation();
-        const input = document.createElement('input');
-        input.value = oldName;
-        input.style.cssText = 'border:none;outline:none;background:transparent;font:inherit;color:inherit;width:100%;padding:0;';
-        spanEl.replaceWith(input);
-        input.focus();
-        input.select();
+    // 分类拖拽排序
+    function initCatDrag(container) {
+        let dragSrc = null;
 
-        function commit() {
-            const newName = input.value.trim();
-            if (newName && newName !== oldName) {
-                const idx = db.cats.indexOf(oldName);
-                if (idx !== -1) {
-                    db.cats[idx] = newName;
-                    db.items.forEach(i => { if(i.cat === oldName) i.cat = newName; });
-                    if(state.workCat === oldName) state.workCat = newName;
-                    if(state.inputCat === oldName) state.inputCat = newName;
-                    persist();
-                    showToast('✅ 分类已改名');
-                    return;
-                }
-            }
-            render(); // 没改就还原
-        }
-
-        input.addEventListener('blur', commit);
-        input.addEventListener('keydown', ev => {
-            if(ev.key === 'Enter') { ev.preventDefault(); input.blur(); }
-            if(ev.key === 'Escape') { input.removeEventListener('blur', commit); render(); }
+        container.querySelectorAll('.sub-item[draggable]').forEach(item => {
+            item.addEventListener('dragstart', function(e) {
+                dragSrc = this;
+                this.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', this.dataset.cat);
+            });
+            item.addEventListener('dragend', function() {
+                this.classList.remove('dragging');
+                container.querySelectorAll('.sub-item').forEach(i => i.classList.remove('drag-over'));
+            });
+            item.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                container.querySelectorAll('.sub-item').forEach(i => i.classList.remove('drag-over'));
+                if (this !== dragSrc) this.classList.add('drag-over');
+            });
+            item.addEventListener('dragleave', function() {
+                this.classList.remove('drag-over');
+            });
+            item.addEventListener('drop', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!dragSrc || this === dragSrc) return;
+                const fromCat = dragSrc.dataset.cat;
+                const toCat   = this.dataset.cat;
+                const fromIdx = db.cats.indexOf(fromCat);
+                const toIdx   = db.cats.indexOf(toCat);
+                if (fromIdx === -1 || toIdx === -1) return;
+                db.cats.splice(fromIdx, 1);
+                db.cats.splice(toIdx, 0, fromCat);
+                persist();
+            });
         });
     }
+
+    // 分类改名（简单可靠的prompt方式）
+    function renameCat(oldName, e) {
+        e.stopPropagation();
+        const newName = prompt('输入新的分类名称：', oldName);
+        if (!newName || !newName.trim() || newName.trim() === oldName) return;
+        const n = newName.trim();
+        const idx = db.cats.indexOf(oldName);
+        if (idx === -1) return;
+        db.cats[idx] = n;
+        db.items.forEach(i => { if(i.cat === oldName) i.cat = n; });
+        if(state.workCat === oldName) state.workCat = n;
+        if(state.inputCat === oldName) state.inputCat = n;
+        persist();
+        showToast('✅ 分类已改名');
+    }
+
+    // 事件委托：双击 .cat-label 触发改名
+    document.addEventListener('dblclick', function(e) {
+        const span = e.target.closest('.cat-label');
+        if (!span) return;
+        e.stopPropagation();
+        e.preventDefault();
+        const catName = span.dataset.cat;
+        // 阻止父级 sub-item 的 onclick 里的 render() 销毁输入框
+        const parent = span.closest('.sub-item');
+        if (parent) {
+            const origOnclick = parent.getAttribute('onclick');
+            parent.removeAttribute('onclick');
+            setTimeout(() => { if(origOnclick) parent.setAttribute('onclick', origOnclick); }, 500);
+        }
+        renameCat(catName, span);
+    });
 
     function delCat(type, val, e) {
         e.stopPropagation();
@@ -1151,18 +1217,45 @@
         }
 
         document.getElementById('search-results').innerHTML = results.map(i => `
-            <div style="border:1px solid #eee; border-radius:10px; padding:14px; margin-bottom:14px;">
-                <div style="display:flex; gap:8px; margin-bottom:8px; align-items:center; justify-content:space-between;">
-                    <div style="display:flex; gap:8px; align-items:center;">
-                        <span style="font-size:11px; background:#f0f0f0; color:#555; padding:2px 8px; border-radius:6px;">${i.cat}</span>
-                        <span style="font-size:11px; color:${statusColor[i.status]}; background:${statusColor[i.status]}18; padding:2px 8px; border-radius:6px; font-weight:600;">${statusLabel[i.status]}</span>
+            <div style="border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:14px; background:var(--card-bg);">
+                <div style="display:flex; gap:8px; margin-bottom:8px; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;">
+                    <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                        <select onchange="searchMoveItem(${i.id}, this.value, '${i.id}')" style="font-size:11px; padding:2px 6px; border:1px solid var(--border); border-radius:6px; background:var(--card-bg); color:var(--text-primary); cursor:pointer;">
+                            ${db.cats.map(c => `<option value="${c}" ${c === i.cat ? 'selected' : ''}>${c}</option>`).join('')}
+                        </select>
+                        <select onchange="searchChangeStatus(${i.id}, parseInt(this.value), '${i.id}')" style="font-size:11px; padding:2px 6px; border:1px solid var(--border); border-radius:6px; background:var(--card-bg); color:${statusColor[i.status]}; cursor:pointer; font-weight:600;">
+                            ${[0,1,3,2].map(s => `<option value="${s}" ${s === i.status ? 'selected' : ''} style="color:${statusColor[s]}">${statusLabel[s]}</option>`).join('')}
+                        </select>
                     </div>
-                    <button onclick="jumpToItem('${i.id}', '${i.cat}', ${i.status})" style="font-size:11px; padding:3px 10px; border:1px solid #5c6bc0; border-radius:6px; background:#fff; color:#5c6bc0; cursor:pointer;">↗ 跳转</button>
+                    <button onclick="jumpToItem('${i.id}', '${i.cat}', ${i.status})" style="font-size:11px; padding:3px 10px; border:1px solid var(--accent); border-radius:6px; background:transparent; color:var(--accent); cursor:pointer;">↗ 跳转</button>
                 </div>
-                <div style="font-size:12px; color:#888; background:#f9f9f9; padding:8px 10px; border-radius:6px; margin-bottom:8px; white-space:pre-wrap; line-height:1.6;">${highlight(i.original, kw)}</div>
-                ${i.modified ? `<div style="font-size:13px; color:#333; white-space:pre-wrap; line-height:1.6;">${highlight(i.modified, kw)}</div>` : ''}
+                <div style="font-size:12px; color:var(--text-secondary); background:var(--orig-bg); padding:8px 10px; border-radius:6px; margin-bottom:8px; white-space:pre-wrap; line-height:1.6;">${highlight(i.original, kw)}</div>
+                ${i.modified ? `<div style="font-size:13px; color:var(--text-primary); white-space:pre-wrap; line-height:1.6;">${highlight(i.modified, kw)}</div>` : ''}
             </div>
         `).join('');
+    }
+
+    function searchMoveItem(id, newCat) {
+        const item = db.items.find(i => i.id == id);
+        if (!item || item.cat === newCat) return;
+        item.cat = newCat;
+        item.lastModified = new Date().toLocaleString();
+        persist();
+        // 重新搜索刷新结果
+        const kw = document.getElementById('global-search').value.trim();
+        if (kw) doSearch(kw);
+        showToast(`✅ 已移到「${newCat}」`);
+    }
+
+    function searchChangeStatus(id, newStatus) {
+        const item = db.items.find(i => i.id == id);
+        if (!item || item.status === newStatus) return;
+        item.status = newStatus;
+        item.lastModified = new Date().toLocaleString();
+        persist();
+        const kw = document.getElementById('global-search').value.trim();
+        if (kw) doSearch(kw);
+        showToast(`✅ 已改为「${statusLabel[newStatus]}」`);
     }
 
     function jumpToItem(id, cat, status) {
