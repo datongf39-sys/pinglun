@@ -1,0 +1,74 @@
+/* ===== DualWrite 注入样式 ===== */
+
+/* 录入按钮：插在点赞那行 */
+.__dw_inject_btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin-left: 10px !important;
+  padding: 0 8px !important;
+  height: 22px !important;
+  background: #ff4757 !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 11px !important;
+  font-size: 12px !important;
+  font-family: "PingFang SC", "Segoe UI", system-ui, sans-serif !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  transition: opacity 0.15s !important;
+  vertical-align: middle !important;
+}
+.__dw_inject_btn:hover { opacity: 0.82 !important; }
+
+/* 分类菜单 */
+#__dw_cat_menu {
+  position: absolute;
+  z-index: 2147483646;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  overflow: hidden;
+  min-width: 150px;
+  font-family: "PingFang SC", "Segoe UI", system-ui, sans-serif;
+  padding: 4px 0;
+}
+.__dw_cat_header {
+  padding: 6px 14px 5px;
+  font-size: 11px;
+  color: #aaa;
+  border-bottom: 1px solid #f5f5f5;
+  margin-bottom: 3px;
+}
+.__dw_cat_item {
+  padding: 9px 16px;
+  font-size: 13px;
+  color: #333;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.__dw_cat_item:hover  { background: #fff4f4; }
+.__dw_cat_item.active { color: #ff4757; font-weight: 600; background: #fff0f1; }
+
+/* Toast */
+#__dw_toast {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2147483647;
+  background: rgba(30,30,30,0.88);
+  color: #fff;
+  padding: 10px 22px;
+  border-radius: 24px;
+  font-size: 13px;
+  font-family: "PingFang SC", "Segoe UI", system-ui, sans-serif;
+  pointer-events: none;
+  white-space: nowrap;
+  animation: __dw_fadeIn 0.2s ease;
+}
+@keyframes __dw_fadeIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}

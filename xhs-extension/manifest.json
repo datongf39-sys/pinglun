@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "评论录入助手 · DualWrite",
+  "version": "1.0.2",
+  "description": "在小红书点击评论旁按钮，自动录入 DualWrite 工作站",
+
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "tabs"
+  ],
+
+  "host_permissions": [
+    "*://*.xiaohongshu.com/*",
+    "*://www.xiaohongshu.com/*",
+    "https://pinglun.onrender.com/*"
+  ],
+
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.xiaohongshu.com/*",
+        "*://www.xiaohongshu.com/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "评论录入助手"
+  },
+
+  "background": {
+    "service_worker": "background.js"
+  },
+
+  "icons": {
+    "16":  "icons/icon16.png",
+    "48":  "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
