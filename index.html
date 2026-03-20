@@ -314,6 +314,7 @@
             </div>
         </div>
         <div id="save-status" style="font-size: 11px; color: #999;"></div>
+        <button onclick="importFromExtension()" class="ghost" style="font-size:12px; padding:5px 12px;">📥 从插件导入</button>
     </div>
 
     <!-- 搜索结果浮层 -->
@@ -2007,8 +2008,56 @@
         document.getElementById('settings-overlay').style.display = 'none';
     }
 
+
+    // ===== 插件同步 =====
+
+    // 页面加载时把分类列表推给插件
+    function syncCatsToExtension() {
+        try {
+            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                chrome.storage.local.set({ dw_categories: db.cats });
+            }
+        } catch(e) {}
+    }
+
+    // 从插件导入待录入评论
+    function importFromExtension() {
+        try {
+            if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) {
+                showToast('⚠️ 请在安装了插件的 Edge 浏览器中使用此功能', 'warn');
+                return;
+            }
+            chrome.storage.local.get('dw_pending', (res) => {
+                const pending = res.dw_pending || [];
+                if (pending.length === 0) {
+                    showToast('插件里没有待导入的评论', 'warn');
+                    return;
+                }
+                pending.forEach(p => {
+                    const cat = p.cat || db.cats[0] || '未分类';
+                    if (!db.cats.includes(cat)) db.cats.push(cat);
+                    db.items.push({
+                        id: p.id || (Date.now() + Math.random()),
+                        cat,
+                        original: p.text,
+                        modified: p.text,
+                        status: 0,
+                        lastModified: p.savedAt || new Date().toLocaleString()
+                    });
+                });
+                // 清空插件里的待导入列表
+                chrome.storage.local.set({ dw_pending: [] });
+                persist();
+                showToast('✅ 已导入 ' + pending.length + ' 条评论！');
+            });
+        } catch(e) {
+            showToast('❌ 导入失败：' + e.message, 'err');
+        }
+    }
+
     initTheme();
     render();
+    syncCatsToExtension();
 </script>
 </body>
 </html>
