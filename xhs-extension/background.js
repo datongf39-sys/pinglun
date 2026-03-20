@@ -1,7 +1,6 @@
 // ===== DualWrite 录入助手 · background.js =====
 
-// 评论库页面（打包在扩展内）
-const WORKSTATION_URL = chrome.runtime.getURL('index.html');
+const WORKSTATION_URL = 'https://pinglun.onrender.com';
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.get('dw_pending', (res) => {
@@ -10,14 +9,6 @@ chrome.runtime.onInstalled.addListener(() => {
     }
   });
 });
-
-// 查找已打开的评论库 tab（精确匹配 URL）
-function findWorkstationTab(callback) {
-  chrome.tabs.query({}, (allTabs) => {
-    const tab = allTabs.find(t => t.url === WORKSTATION_URL);
-    callback(tab || null);
-  });
-}
 
 // 从工作站页面读取分类列表
 function syncCatsFromWorkstation(tabId) {
@@ -65,7 +56,7 @@ function autoImportToWorkstation(tabId) {
             });
           });
           localStorage.setItem('dw_v15_db', JSON.stringify(db));
-          // 触发工作站实时刷新
+          // 触发工作站实时刷新（无需手动刷新页面）
           if (typeof render === 'function') render();
           if (typeof showToast === 'function') showToast('✅ 已导入 ' + items.length + ' 条评论！');
           return true;
@@ -91,15 +82,16 @@ function autoImportToWorkstation(tabId) {
 // 监听来自 content.js 的消息
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'OPEN_WORKSTATION') {
-    findWorkstationTab((tab) => {
-      if (tab) {
-        // 评论库已打开，切换到它并导入
+    chrome.tabs.query({ url: WORKSTATION_URL + '/*' }, (tabs) => {
+      if (tabs && tabs.length > 0) {
+        const tab = tabs[0];
         chrome.tabs.update(tab.id, { active: true });
         chrome.windows.update(tab.windowId, { focused: true });
+        // 工作站已打开，直接导入
         autoImportToWorkstation(tab.id);
         syncCatsFromWorkstation(tab.id);
       } else {
-        // 新开评论库，等加载完再导入
+        // 新开工作站，等加载完再导入
         chrome.tabs.create({ url: WORKSTATION_URL }, (newTab) => {
           chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
             if (tabId === newTab.id && info.status === 'complete') {
@@ -118,6 +110,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 // 插件启动时同步一次分类
-findWorkstationTab((tab) => {
-  if (tab) syncCatsFromWorkstation(tab.id);
+chrome.tabs.query({ url: WORKSTATION_URL + '/*' }, (tabs) => {
+  if (tabs && tabs.length > 0) {
+    syncCatsFromWorkstation(tabs[0].id);
+  }
 });

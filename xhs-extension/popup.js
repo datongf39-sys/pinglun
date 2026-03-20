@@ -81,12 +81,11 @@ function saveCategories() {
 
 // ---- 打开评论库 ----
 document.getElementById('btn-open-workstation').addEventListener('click', () => {
-  const url = chrome.runtime.getURL('index.html');
-  chrome.tabs.query({}, (allTabs) => {
-    const existing = allTabs.find(t => t.url === url);
-    if (existing) {
-      chrome.tabs.update(existing.id, { active: true });
-      chrome.windows.update(existing.windowId, { focused: true });
+  const url = 'https://pinglun.onrender.com';
+  chrome.tabs.query({ url: url + '/*' }, (tabs) => {
+    if (tabs && tabs.length > 0) {
+      chrome.tabs.update(tabs[0].id, { active: true });
+      chrome.windows.update(tabs[0].windowId, { focused: true });
     } else {
       chrome.tabs.create({ url });
     }
