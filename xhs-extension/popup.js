@@ -1,13 +1,49 @@
 // ===== DualWrite 录入助手 · popup.js =====
 
+const WORKSTATION_URL = 'https://pinglun.onrender.com';
 let categories = [];
+
+// ---- 从评论库（pinglun.onrender.com）读取分类并同步 ----
+function syncCatsFromWorkstation(onDone) {
+  chrome.tabs.query({ url: WORKSTATION_URL + '/*' }, (tabs) => {
+    if (!tabs || tabs.length === 0) {
+      if (onDone) onDone(false);
+      return;
+    }
+    chrome.scripting.executeScript({
+      target: { tabId: tabs[0].id },
+      func: () => {
+        try {
+          const db = JSON.parse(localStorage.getItem('dw_v15_db') || '{}');
+          return db.cats || [];
+        } catch(e) { return []; }
+      }
+    }, (results) => {
+      if (chrome.runtime.lastError) { if (onDone) onDone(false); return; }
+      const cats = results && results[0] && results[0].result;
+      if (cats && cats.length > 0) {
+        categories = cats;
+        chrome.storage.local.set({ dw_categories: cats }, () => {
+          renderCatList();
+          if (onDone) onDone(true, cats.length);
+        });
+      } else {
+        if (onDone) onDone(false);
+      }
+    });
+  });
+}
 
 // ---- 加载所有数据 ----
 function loadAll() {
+  // 优先从评论库实时同步分类，若评论库未开则用缓存
+  syncCatsFromWorkstation(() => {});
+
   chrome.storage.local.get(['dw_pending', 'dw_stat_total', 'dw_categories'], (res) => {
-    const pending    = res.dw_pending    || [];
-    const totalEver  = res.dw_stat_total || 0;
-    categories       = res.dw_categories || [];
+    const pending   = res.dw_pending    || [];
+    const totalEver = res.dw_stat_total || 0;
+    // 若 syncCatsFromWorkstation 还没回来，先用缓存兜底
+    if (categories.length === 0) categories = res.dw_categories || [];
 
     // 统计
     const todayStr   = new Date().toLocaleDateString();
@@ -78,6 +114,22 @@ function saveCategories() {
     showToast('✅ 分类已更新');
   });
 }
+
+// ---- 手动同步分类按钮 ----
+document.getElementById('btn-sync-cats').addEventListener('click', () => {
+  const btn = document.getElementById('btn-sync-cats');
+  btn.textContent = '⏳';
+  btn.disabled = true;
+  syncCatsFromWorkstation((ok, count) => {
+    btn.textContent = '🔄 同步';
+    btn.disabled = false;
+    if (ok) {
+      showToast('✅ 已同步 ' + count + ' 个分类');
+    } else {
+      showToast('⚠️ 请先打开评论库再同步');
+    }
+  });
+});
 
 // ---- 打开评论库 ----
 document.getElementById('btn-open-workstation').addEventListener('click', () => {
