@@ -2011,6 +2011,32 @@
 
     // ===== 插件同步 =====
 
+    // 页面加载时自动从插件导入
+    function autoImportFromExtension() {
+        try {
+            if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) return;
+            chrome.storage.local.get('dw_pending', (res) => {
+                const pending = res.dw_pending || [];
+                if (pending.length === 0) return;
+                pending.forEach(p => {
+                    const cat = p.cat || db.cats[0] || '未分类';
+                    if (!db.cats.includes(cat)) db.cats.push(cat);
+                    db.items.push({
+                        id: p.id || (Date.now() + Math.random()),
+                        cat,
+                        original: p.text,
+                        modified: p.text,
+                        status: 0,
+                        lastModified: p.savedAt || new Date().toLocaleString()
+                    });
+                });
+                chrome.storage.local.set({ dw_pending: [] });
+                persist();
+                showToast('✅ 已自动导入 ' + pending.length + ' 条评论！');
+            });
+        } catch(e) {}
+    }
+
     // 页面加载时把分类列表推给插件
     function syncCatsToExtension() {
         try {
@@ -2058,6 +2084,7 @@
     initTheme();
     render();
     syncCatsToExtension();
+    autoImportFromExtension();
 </script>
 </body>
 </html>
