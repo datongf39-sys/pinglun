@@ -5,11 +5,10 @@ let categories = [];
 // ---- 加载所有数据 ----
 function loadAll() {
   chrome.storage.local.get(['dw_pending', 'dw_stat_total', 'dw_categories'], (res) => {
-    const pending    = res.dw_pending    || [];
-    const totalEver  = res.dw_stat_total || 0;
-    categories       = res.dw_categories || [];
+    const pending   = res.dw_pending    || [];
+    const totalEver = res.dw_stat_total || 0;
+    categories      = res.dw_categories || [];
 
-    // 统计
     const todayStr   = new Date().toLocaleDateString();
     const todayCount = pending.filter(p => p.savedAt && p.savedAt.startsWith(todayStr)).length;
 
@@ -17,10 +16,8 @@ function loadAll() {
     document.getElementById('stat-today').innerText      = todayCount;
     document.getElementById('stat-total-ever').innerText = totalEver + pending.length;
 
-    // 分类标签
     renderCatList();
 
-    // 待导入列表
     const listEl    = document.getElementById('pending-list');
     const exportBtn = document.getElementById('btn-export');
     if (pending.length === 0) {
@@ -78,6 +75,26 @@ function saveCategories() {
     showToast('✅ 分类已更新');
   });
 }
+
+// ---- 手动同步按钮：重新从 chrome.storage 读取最新分类 ----
+document.getElementById('btn-sync-cats').addEventListener('click', () => {
+  loadAll();
+  showToast('✅ 已刷新分类');
+});
+
+// ---- 打开评论库 ----
+document.getElementById('btn-open-workstation').addEventListener('click', () => {
+  const url = 'https://pinglun.onrender.com';
+  chrome.tabs.query({ url: url + '/*' }, (tabs) => {
+    if (tabs && tabs.length > 0) {
+      chrome.tabs.update(tabs[0].id, { active: true });
+      chrome.windows.update(tabs[0].windowId, { focused: true });
+    } else {
+      chrome.tabs.create({ url });
+    }
+    window.close();
+  });
+});
 
 document.getElementById('btn-add-cat').addEventListener('click', addCategory);
 document.getElementById('new-cat-input').addEventListener('keydown', (e) => {
