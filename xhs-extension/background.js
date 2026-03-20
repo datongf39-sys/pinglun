@@ -1,6 +1,7 @@
 // ===== DualWrite 录入助手 · background.js =====
 
-const WORKSTATION_URL = 'https://pinglun.onrender.com';
+// 评论库页面（打包在扩展内）
+const WORKSTATION_URL = chrome.runtime.getURL('index.html');
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.get('dw_pending', (res) => {
@@ -9,6 +10,14 @@ chrome.runtime.onInstalled.addListener(() => {
     }
   });
 });
+
+// 查找已打开的评论库 tab（精确匹配 URL）
+function findWorkstationTab(callback) {
+  chrome.tabs.query({}, (allTabs) => {
+    const tab = allTabs.find(t => t.url === WORKSTATION_URL);
+    callback(tab || null);
+  });
+}
 
 // 从工作站页面读取分类列表
 function syncCatsFromWorkstation(tabId) {
@@ -29,7 +38,7 @@ function syncCatsFromWorkstation(tabId) {
   });
 }
 
-// 从工作站页面自动导入 pending 评论
+// 向工作站自动导入 pending 评论
 function autoImportToWorkstation(tabId) {
   chrome.storage.local.get('dw_pending', (res) => {
     const pending = res.dw_pending || [];
@@ -37,6 +46,7 @@ function autoImportToWorkstation(tabId) {
 
     chrome.scripting.executeScript({
       target: { tabId },
+      world: 'MAIN',  // 在页面主世界执行，可直接调用 render()、showToast()
       func: (items) => {
         try {
           let db = JSON.parse(localStorage.getItem('dw_v15_db') || '{}');
@@ -55,7 +65,7 @@ function autoImportToWorkstation(tabId) {
             });
           });
           localStorage.setItem('dw_v15_db', JSON.stringify(db));
-          // 触发工作站刷新
+          // 触发工作站实时刷新
           if (typeof render === 'function') render();
           if (typeof showToast === 'function') showToast('✅ 已导入 ' + items.length + ' 条评论！');
           return true;
@@ -66,8 +76,13 @@ function autoImportToWorkstation(tabId) {
       if (chrome.runtime.lastError) return;
       const ok = results && results[0] && results[0].result;
       if (ok) {
-        // 清空 pending
-        chrome.storage.local.set({ dw_pending: [] });
+        // 清空 pending 并累计统计
+        chrome.storage.local.get('dw_stat_total', (r) => {
+          chrome.storage.local.set({
+            dw_pending: [],
+            dw_stat_total: (r.dw_stat_total || 0) + pending.length
+          });
+        });
       }
     });
   });
@@ -76,25 +91,23 @@ function autoImportToWorkstation(tabId) {
 // 监听来自 content.js 的消息
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'OPEN_WORKSTATION') {
-    chrome.tabs.query({ url: WORKSTATION_URL + '/*' }, (tabs) => {
-      if (tabs && tabs.length > 0) {
-        const tabId = tabs[0].id;
-        chrome.tabs.update(tabId, { active: true });
-        chrome.windows.update(tabs[0].windowId, { focused: true });
-        // 工作站已开着，直接注入导入
-        autoImportToWorkstation(tabId);
-        syncCatsFromWorkstation(tabId);
+    findWorkstationTab((tab) => {
+      if (tab) {
+        // 评论库已打开，切换到它并导入
+        chrome.tabs.update(tab.id, { active: true });
+        chrome.windows.update(tab.windowId, { focused: true });
+        autoImportToWorkstation(tab.id);
+        syncCatsFromWorkstation(tab.id);
       } else {
-        // 新开工作站，等加载完再导入
-        chrome.tabs.create({ url: WORKSTATION_URL }, (tab) => {
-          // 监听加载完成
+        // 新开评论库，等加载完再导入
+        chrome.tabs.create({ url: WORKSTATION_URL }, (newTab) => {
           chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
-            if (tabId === tab.id && info.status === 'complete') {
+            if (tabId === newTab.id && info.status === 'complete') {
               chrome.tabs.onUpdated.removeListener(listener);
               setTimeout(() => {
-                autoImportToWorkstation(tab.id);
-                syncCatsFromWorkstation(tab.id);
-              }, 1000); // 等工作站 JS 跑完
+                autoImportToWorkstation(newTab.id);
+                syncCatsFromWorkstation(newTab.id);
+              }, 1000); // 等页面 JS 初始化完成
             }
           });
         });
@@ -104,9 +117,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
-// 定期从工作站同步分类（每次插件启动时）
-chrome.tabs.query({ url: WORKSTATION_URL + '/*' }, (tabs) => {
-  if (tabs && tabs.length > 0) {
-    syncCatsFromWorkstation(tabs[0].id);
-  }
+// 插件启动时同步一次分类
+findWorkstationTab((tab) => {
+  if (tab) syncCatsFromWorkstation(tab.id);
 });

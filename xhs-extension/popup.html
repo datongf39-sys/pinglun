@@ -45,6 +45,8 @@
     .btn-primary:disabled { opacity: 0.4; cursor: default; }
     .btn-ghost { background: #f5f5f5; color: #555; border: none; border-radius: 10px; padding: 9px; font-size: 13px; cursor: pointer; width: 100%; transition: opacity 0.2s; }
     .btn-ghost:hover { opacity: 0.8; }
+    .btn-open { background: #fff; color: #ff4757; border: 1.5px solid #ff4757; border-radius: 10px; padding: 9px; font-size: 13px; font-weight: 600; cursor: pointer; width: 100%; transition: 0.2s; }
+    .btn-open:hover { background: #fff0f1; }
 
     #copy-code-area { display: none; padding: 0 16px 12px; }
     #copy-code-area p { font-size: 11px; color: #999; margin-bottom: 6px; line-height: 1.6; }
@@ -88,6 +90,7 @@
 <div id="toast"></div>
 
 <div class="actions">
+  <button class="btn-open" id="btn-open-workstation">📖 打开评论库</button>
   <button class="btn-primary" id="btn-export" disabled>📤 生成导入代码</button>
   <button class="btn-ghost" id="btn-clear">🗑 清空待导入列表</button>
 </div>

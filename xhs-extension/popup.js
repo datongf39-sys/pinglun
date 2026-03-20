@@ -79,6 +79,21 @@ function saveCategories() {
   });
 }
 
+// ---- 打开评论库 ----
+document.getElementById('btn-open-workstation').addEventListener('click', () => {
+  const url = chrome.runtime.getURL('index.html');
+  chrome.tabs.query({}, (allTabs) => {
+    const existing = allTabs.find(t => t.url === url);
+    if (existing) {
+      chrome.tabs.update(existing.id, { active: true });
+      chrome.windows.update(existing.windowId, { focused: true });
+    } else {
+      chrome.tabs.create({ url });
+    }
+    window.close();
+  });
+});
+
 document.getElementById('btn-add-cat').addEventListener('click', addCategory);
 document.getElementById('new-cat-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') addCategory();
