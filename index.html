@@ -673,6 +673,8 @@
         localStorage.setItem('dw_v15_db', JSON.stringify(db));
         document.getElementById('save-status').innerText = "已同步本地：" + new Date().toLocaleTimeString();
         render();
+        // 同步分类到插件
+        syncCatsToExtension();
     }
 
     function render() {
