@@ -2043,9 +2043,14 @@
     function syncCatsToExtension() {
         try {
             if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-                chrome.storage.local.set({ dw_categories: db.cats });
+                console.log('[Sync] 同步分类到插件:', db.cats);
+                chrome.storage.local.set({ dw_categories: db.cats }, () => {
+                    console.log('[Sync] 分类同步成功');
+                });
             }
-        } catch(e) {}
+        } catch(e) {
+            console.error('[Sync] 同步失败:', e);
+        }
     }
 
     // 从插件导入待录入评论
