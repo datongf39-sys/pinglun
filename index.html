@@ -1393,10 +1393,36 @@
             });
         }
 
-        const resp = await fetch(url, { method: 'POST', headers, body });
+        let resp;
+        try {
+            resp = await fetch(url, { method: 'POST', headers, body });
+        } catch (e) {
+            // 网络错误或CORS错误
+            if (e.message.includes('Failed to fetch') || e.name === 'TypeError') {
+                throw new Error(`网络请求失败：\n1. 检查 API 地址格式是否正确（需要完整 URL）\n2. 检查网络连接\n3. 可能存在 CORS 跨域问题\n原始错误：${e.message}`);
+            }
+            throw e;
+        }
+
         if (!resp.ok) {
             let errText = await resp.text();
-            throw new Error(`HTTP ${resp.status}: ${errText.substring(0, 200)}`);
+            let errMsg = `HTTP ${resp.status} 错误：\n`;
+
+            // 根据状态码给出具体提示
+            if (resp.status === 401) {
+                errMsg += '❌ API Key 无效或已过期\n';
+            } else if (resp.status === 404) {
+                errMsg += '❌ API 地址错误（404 Not Found）\n检查：\n- OpenAI 格式应为 /v1/chat/completions\n- Anthropic 格式应为 /v1/messages\n';
+            } else if (resp.status === 400) {
+                errMsg += '❌ 请求参数错误，可能是：\n- 模型名称不存在或拼写错误\n- API 格式不匹配（OpenAI/Anthropic）\n';
+            } else if (resp.status === 429) {
+                errMsg += '❌ 请求频率超限或余额不足\n';
+            } else if (resp.status >= 500) {
+                errMsg += '❌ 服务器错误，请稍后重试\n';
+            }
+
+            errMsg += `\n服务器返回：${errText.substring(0, 300)}`;
+            throw new Error(errMsg);
         }
 
         if (!stream) {
