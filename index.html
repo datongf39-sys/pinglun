@@ -1399,7 +1399,42 @@
         } catch (e) {
             // 网络错误或CORS错误
             if (e.message.includes('Failed to fetch') || e.name === 'TypeError') {
-                throw new Error(`网络请求失败：\n1. 检查 API 地址格式是否正确（需要完整 URL）\n2. 检查网络连接\n3. 可能存在 CORS 跨域问题\n原始错误：${e.message}`);
+                let errMsg = '❌ 网络请求失败\n\n';
+
+                // 先判断URL格式
+                try {
+                    new URL(url);
+                } catch (urlError) {
+                    errMsg += '原因：API 地址格式错误\n';
+                    errMsg += '正确格式示例：\n';
+                    errMsg += '  https://api.openai.com/v1/chat/completions\n';
+                    errMsg += '  https://api.anthropic.com/v1/messages\n';
+                    throw new Error(errMsg);
+                }
+
+                // URL格式正确，进一步判断是CORS还是网络问题
+                errMsg += '正在诊断问题...\n';
+                try {
+                    // 尝试简单的GET请求测试连通性
+                    const testResp = await fetch(url, { method: 'GET', mode: 'no-cors' });
+                    // 如果no-cors能通，说明是CORS问题
+                    errMsg += '\n✓ 服务器可达\n';
+                    errMsg += '✗ 问题确认：CORS 跨域限制\n\n';
+                    errMsg += '解决方法：\n';
+                    errMsg += '1. 安装浏览器 CORS 插件（搜索 "Allow CORS"）\n';
+                    errMsg += '2. 使用支持 CORS 的 API 中转服务\n';
+                    errMsg += '3. 自建代理服务器转发请求\n';
+                } catch (testErr) {
+                    // 连no-cors都不通，是网络问题
+                    errMsg += '\n✗ 服务器不可达\n\n';
+                    errMsg += '可能原因：\n';
+                    errMsg += '1. API 地址错误或服务已下线\n';
+                    errMsg += '2. 网络连接问题\n';
+                    errMsg += '3. 防火墙或代理拦截\n';
+                }
+
+                errMsg += `\n原始错误：${e.message}`;
+                throw new Error(errMsg);
             }
             throw e;
         }
